@@ -1,0 +1,23 @@
+{
+  "name": "intercom-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for the Intercom REST API",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "intercom-mcp-server": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "prepare": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.15.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.8.3"
+  }
+}
