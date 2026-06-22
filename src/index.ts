@@ -53,12 +53,18 @@ async function main() {
   const useProxy = !isAuthenticated();
 
   let proxyTools: Tool[] = [];
+  // Kicked off immediately but not awaited — stdio connects first so
+  // Claude's initialize handshake doesn't time out waiting for OAuth.
+  let proxyInitPromise: Promise<void> | null = null;
+
   if (useProxy) {
     process.stderr.write(
       "No INTERCOM_ACCESS_TOKEN or stored OAuth token found — starting in proxy mode.\n" +
       "Proxying through mcp.intercom.com (uses your existing mcp-remote session).\n"
     );
-    proxyTools = await initProxyClient();
+    proxyInitPromise = initProxyClient().then((tools) => {
+      proxyTools = tools;
+    });
   } else {
     process.stderr.write("Token found — starting in native mode (api.intercom.io).\n");
   }
@@ -68,15 +74,14 @@ async function main() {
     { capabilities: { tools: {} } }
   );
 
-  // In proxy mode: expose the proxy's tools plus auth tools.
-  // In native mode: expose all native tools.
-  const exposedTools: Tool[] = useProxy
-    ? [...authTools, ...proxyTools]
-    : nativeTools;
-
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: exposedTools,
-  }));
+  server.setRequestHandler(ListToolsRequestSchema, async () => {
+    // Wait for proxy to finish connecting before advertising its tools.
+    if (proxyInitPromise) await proxyInitPromise;
+    const exposedTools: Tool[] = useProxy
+      ? [...authTools, ...proxyTools]
+      : nativeTools;
+    return { tools: exposedTools };
+  });
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
@@ -91,6 +96,7 @@ async function main() {
 
       // Proxy mode: forward to mcp.intercom.com
       if (useProxy) {
+        if (proxyInitPromise) await proxyInitPromise;
         return await callProxyTool(name, input);
       }
 
